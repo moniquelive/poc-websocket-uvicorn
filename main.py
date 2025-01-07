@@ -1,5 +1,18 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+import os
+
+from fastapi import (
+    FastAPI,
+    WebSocket,
+    WebSocketDisconnect
+)
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
+
+
+class Payload(BaseModel):
+    client_id: str
+    message: str
+
 
 app = FastAPI()
 
@@ -47,6 +60,7 @@ class ConnectionManager:
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
+        print(f"PID: {os.getpid()} connected")
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
@@ -54,6 +68,13 @@ class ConnectionManager:
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         await websocket.send_text(message)
+
+    async def send_user_message(self, message: str, user_id: str):
+        connection = [conn for conn in self.active_connections if conn.path_params['client_id'] == user_id]
+        if not connection: return False
+
+        await connection[0].send_text(f"directly to you: {message}")
+        return True
 
     async def broadcast(self, message: str):
         for connection in self.active_connections:
@@ -66,6 +87,14 @@ manager = ConnectionManager()
 @app.get("/")
 async def get():
     return HTMLResponse(html)
+
+
+@app.post("/send")
+async def send_message(msg: Payload):
+    if await manager.send_user_message(msg.message, msg.client_id):
+        return JSONResponse({"status": "ok"})
+    else:
+        return JSONResponse({"status": "client_id not found"})
 
 
 @app.websocket("/ws/{client_id}")

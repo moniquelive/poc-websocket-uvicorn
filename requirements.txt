@@ -2,3 +2,6 @@ fastapi
 uvicorn
 websockets
 pydantic
+broadcaster~=0.3
+redis
+anyio

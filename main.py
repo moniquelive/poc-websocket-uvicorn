@@ -13,12 +13,6 @@ from fastapi.responses import (
 )
 from pydantic import BaseModel
 
-
-class Payload(BaseModel):
-    client_id: str
-    message: str
-
-
 broadcast = Broadcast(os.getenv("REDIS_URL") or "redis://localhost:6379")
 
 
@@ -43,7 +37,7 @@ html = """
     </head>
     <body>
         <h1>WebSocket Chat</h1>
-        <h2>Your ID: <span id="ws-id"></span></h2>
+        <h2>Your ID: &nbsp;<input type="text" id="ws-id" autocomplete="off" onchange="connect()"/></h2>
         <form action="" onsubmit="sendMessage(event)">
             <input type="text" id="messageText" autocomplete="off"/>
             <button>Send</button>
@@ -51,21 +45,29 @@ html = """
         <ul id='messages'>
         </ul>
         <script>
-            var client_id = Date.now()
-            document.querySelector("#ws-id").textContent = client_id;
-            var ws = new WebSocket(`ws://${location.host}/ws/${client_id}`);
-            ws.onmessage = function(event) {
-                var messages = document.getElementById('messages')
-                var message = document.createElement('li')
-                var content = document.createTextNode(event.data)
-                message.appendChild(content)
-                messages.appendChild(message)
-            };
+            let ws = undefined;
+            let client_id = document.getElementById("ws-id");
+            client_id.value = Date.now()+"";
+            connect();
+
+            function connect() {
+                if (ws !== undefined) {
+                    ws.close();
+                }
+                ws = new WebSocket(`ws://${location.host}/ws/${client_id.value}`);
+                ws.onmessage = function(event) {
+                    const ulMessages = document.getElementById('messages');
+                    const liMessage = document.createElement('li');
+                    const content = document.createTextNode(event.data);
+                    liMessage.appendChild(content);
+                    ulMessages.appendChild(liMessage);
+                };
+            }
             function sendMessage(event) {
-                var input = document.getElementById("messageText")
-                ws.send(input.value)
-                input.value = ''
-                event.preventDefault()
+                const input = document.getElementById("messageText");
+                ws.send(input.value);
+                input.value = '';
+                event.preventDefault();
             }
         </script>
     </body>
@@ -76,6 +78,11 @@ html = """
 @app.get("/")
 async def get():
     return HTMLResponse(html)
+
+
+class Payload(BaseModel):
+    client_id: str
+    message: str
 
 
 @app.post("/send")
